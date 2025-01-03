@@ -36,13 +36,16 @@ class OptimizerConfig:
 
 
 @dataclass
-class CheckpointConfig:
+class BaseCheckpointConfig:
   restart_from_last_checkpoint: bool = True
   num_checkpoints: int = 5
   async_timeout_secs: int = 50
 
+  def get_orbax_checkpointer(self):
+    raise NotImplementedError
+  
   def get_checkpointer(self, experiment_path: Path):
-    orbax_checkpointer = orbax.checkpoint.AsyncCheckpointer(orbax.checkpoint.PyTreeCheckpointHandler(), timeout_secs=self.async_timeout_secs)
+    orbax_checkpointer = self.get_orbax_checkpointer()
     checkpoint_manager: CheckpointManager = orbax.checkpoint.CheckpointManager(
         str(experiment_path.joinpath("checkpoints")),
         orbax_checkpointer,
@@ -68,6 +71,21 @@ class CheckpointConfig:
 
 
 @dataclass
+class AsyncCheckpointerConfig(BaseCheckpointConfig):
+  async_timeout_secs: int = 50
+
+  def get_orbax_checkpointer(self):
+    return orbax.checkpoint.AsyncCheckpointer(orbax.checkpoint.PyTreeCheckpointHandler(), timeout_secs=self.async_timeout_secs)
+
+
+@dataclass
+class SyncCheckpointerConfig(BaseCheckpointConfig):
+  def get_orbax_checkpointer(self):
+    return orbax.checkpoint.Checkpointer(orbax.checkpoint.PyTreeCheckpointHandler())
+
+
+
+@dataclass
 class DatasetConfig:
   name: str = "mnist"
   train_batch_size: int = 128
@@ -75,6 +93,8 @@ class DatasetConfig:
   def get_loader(self):
     if self.name == 'mnist':
       dataset = my_dataset.get_mnist()
+    elif self.name == 'circle':
+      dataset = my_dataset.get_circle_dataset()
     else:
         raise ValueError(f"Unknown dataset {self.name}")
     # enforce the same batch size for training and testing
@@ -98,7 +118,7 @@ class BaseModelConfig:
 class BaseConfig:
   experiment_name: str
   optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-  checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
+  checkpoint: BaseCheckpointConfig = field(default_factory=AsyncCheckpointerConfig)
   dataset: DatasetConfig = field(default_factory=DatasetConfig)
   seed: int = 42
   epochs: int = 100

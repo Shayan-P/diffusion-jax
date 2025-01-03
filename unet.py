@@ -91,7 +91,7 @@ class ResidualDownsample(nn.Module, RequiresTrainingFlag):
         return x
 
 
-class TimeMLP(nn.Module):
+class MLP(nn.Module):
     '''
     naive introduce timestep information to feature maps with mlp and add shortcut
     '''
@@ -111,7 +111,6 @@ class TimeMLP(nn.Module):
 
 class EncoderBlock(nn.Module, RequiresTrainingFlag):
     out_channels:int
-    time_embedding_dim:int
 
     @nn.compact
     def __call__(self, x, t, training: bool):
@@ -121,7 +120,7 @@ class EncoderBlock(nn.Module, RequiresTrainingFlag):
             ResidualBottleneck(self.out_channels//2)
         ], x, training=training)
         if t is not None:
-            x = TimeMLP(hidden_dim=self.out_channels, output_dim=self.out_channels//2)(
+            x = MLP(hidden_dim=self.out_channels, output_dim=self.out_channels//2)(
                 x, t
             )
         x = ResidualDownsample(self.out_channels)(x, training=training)
@@ -136,7 +135,6 @@ def upsample(img, HW):
 
 class DecoderBlock(nn.Module, RequiresTrainingFlag):
     out_channels: int
-    time_embedding_dim: int
 
     @nn.compact
     def __call__(self, x, x_shortcut, t, training: bool):
@@ -150,7 +148,7 @@ class DecoderBlock(nn.Module, RequiresTrainingFlag):
             ResidualBottleneck(c//2)
         ], x, training=training)
         if t is not None:
-            x = TimeMLP(hidden_dim=c, output_dim=c//2)(
+            x = MLP(hidden_dim=c, output_dim=c//2)(
                 x, t
             )
         x = ResidualBottleneck(self.out_channels//2)(x, training=training)
@@ -178,7 +176,7 @@ class Unet(nn.Module, RequiresTrainingFlag):
             )
         encoder_shortcuts = []
         for dim in self.dims[1:]:
-            x, x_shortcut = EncoderBlock(out_channels=dim, time_embedding_dim=self.timestep_dim)(
+            x, x_shortcut = EncoderBlock(out_channels=dim)(
                 x, t, training=training
             )
             encoder_shortcuts.append(x_shortcut)
@@ -190,8 +188,53 @@ class Unet(nn.Module, RequiresTrainingFlag):
         ], x, training=training)
 
         for x_shortcut, dim in reversed(list(zip(encoder_shortcuts, self.dims[:-1]))):
-            x = DecoderBlock(out_channels=dim, time_embedding_dim=self.timestep_dim)(
+            x = DecoderBlock(out_channels=dim)(
                 x, x_shortcut, t, training=training
+            )
+        x = nn.Conv(self.out_channels, kernel_size=(1, 1))(x)
+        return x
+
+
+class ConditionalUnet(nn.Module, RequiresTrainingFlag):
+    timestep_num: int
+    timestep_dim: int
+    out_channels: int
+    dims: tp.Tuple[int] # = tuple(32 * x for x in [1, 2, 4, 8, 16])
+    label_count: int
+    label_dim: int
+
+    '''
+    simple unet design without attention
+    '''
+    @nn.compact
+    def __call__(self, x, labels, t, training: bool):
+        assert all(dim % 2 == 0 for dim in self.dims)
+
+        assert labels.shape == t.shape
+
+        x = ConvBnSiLu(out_channels=self.dims[0], kernel_size=(3, 3))(
+            x, training=training
+        )
+        t = nn.Embed(num_embeddings=self.timestep_num, features=self.timestep_dim)(t)
+        labels = nn.Embed(num_embeddings=self.label_count, features=self.label_dim)(labels)
+        condition = jnp.concatenate([t, labels], axis=-1)
+
+        encoder_shortcuts = []
+        for dim in self.dims[1:]:
+            x, x_shortcut = EncoderBlock(out_channels=dim)(
+                x, condition, training=training
+            )
+            encoder_shortcuts.append(x_shortcut)
+
+        # mid block
+        x = sequantial_apply([
+            *[ResidualBottleneck(self.dims[-1]) for i in range(2)],
+            ResidualBottleneck(self.dims[-1]//2)
+        ], x, training=training)
+
+        for x_shortcut, dim in reversed(list(zip(encoder_shortcuts, self.dims[:-1]))):
+            x = DecoderBlock(out_channels=dim)(
+                x, x_shortcut, condition, training=training
             )
         x = nn.Conv(self.out_channels, kernel_size=(1, 1))(x)
         return x

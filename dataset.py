@@ -35,3 +35,13 @@ def get_mnist():
     return datasets.MNIST(
        str(DATASET_PATH.joinpath("mnist").absolute()),
        download=True, transform=transform)
+
+
+def get_circle_dataset():
+  theta = np.linspace(0, 2 * np.pi, 50000)
+  x = np.cos(theta)
+  y = np.sin(theta)
+  return [
+     (np.array([x]), np.array([y]))
+     for x, y in zip(x, y)
+  ]

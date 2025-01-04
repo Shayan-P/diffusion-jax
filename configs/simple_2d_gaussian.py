@@ -11,9 +11,6 @@ from functools import partial
 from pathlib import Path
 
 
-# plt.switch_backend('agg')
-
-
 @partial(jax.jit, static_argnames=("data_shape",))
 def sampling(state, rng, y, data_shape):
     return state.apply_fn(state.params, method=DDPMConditionalWithMLP.sampling, y=y, data_shape=data_shape, rng=rng)
@@ -32,6 +29,8 @@ class Trainer(AbstractTrainer):
     self.x_shape = x_shape
     self.log_sample_count = log_sample_count
 
+    plt.switch_backend('agg') # for headless mode. perhaps remove later do to it's sideeffects
+
   def train_batch(self, rng, state, batch, epoch):
     (x, y) = batch
     x = jnp.array(x, dtype=jnp.float32)
@@ -44,7 +43,7 @@ class Trainer(AbstractTrainer):
   def end_of_epoch_callback(self, rng, state, epoch):
     gen_count = self.log_sample_count
     # this is assuming y is 1D and between 0, 1
-    y = jnp.linspace(-1, 1, gen_count)[:, None]
+    y = jnp.linspace(-3, 3, gen_count)[:, None]
     x = sampling(state, rng, y=y, data_shape=self.x_shape)
 
     assert x.shape[0] == gen_count
@@ -100,7 +99,11 @@ class Config(BaseConfig):
 
 
 def get_config():
-  config = Config(experiment_name="simple_2d")
-  config.dataset.name = 'circle'
+  config = Config(experiment_name="simple_2d_guassian")
+  config.dataset.name = 'gaussian_points'
   config.checkpoint = SyncCheckpointerConfig()
+  config.optimizer.start_lr = 1e-3
+  config.optimizer.end_lr = 1e-5
+  config.optimizer.warmup_steps = 100
+  config.dataset.train_batch_size = 1024
   return config

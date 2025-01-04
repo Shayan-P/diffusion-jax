@@ -38,9 +38,21 @@ def get_mnist():
 
 
 def get_circle_dataset():
-  theta = np.linspace(0, 2 * np.pi, 50000)
+  N = 50000
+  theta = np.linspace(0, 2 * np.pi, N)
   x = np.cos(theta)
   y = np.sin(theta)
+  return [
+     (np.array([x]), np.array([y]))
+     for x, y in zip(x, y)
+  ]
+
+
+def get_gaussian_points_dataset():
+  # for now hardcoding the parameters
+  N = 50000
+  x = np.random.randn(N)
+  y = 0.1 + 0.4 * x + 0.5 * np.random.randn(N)
   return [
      (np.array([x]), np.array([y]))
      for x, y in zip(x, y)

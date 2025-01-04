@@ -38,9 +38,9 @@ class DDPM(nn.Module):
                     out_channels=self.channels,
                     dims=self.dims)
 
-    def __call__(self, x, t, noise):
+    def __call__(self, x, t, noise, training: bool=True):
         x_t = self.forward_diffusion(x, t, noise)
-        noise_pred = self.unet(x_t, t, training=True)
+        noise_pred = self.unet(x_t, t, training=training)
         return noise_pred
 
     def forward_diffusion(self, x, t, noise):
@@ -122,9 +122,9 @@ class DDPMConditional(nn.Module):
                     label_count=self.label_count,
                     label_dim=self.label_dim)
 
-    def __call__(self, x, labels, t, noise):
+    def __call__(self, x, labels, t, noise, training: bool=True):
         x_t = self.forward_diffusion(x, t, noise)
-        noise_pred = self.unet(x_t, labels, t, training=True)
+        noise_pred = self.unet(x_t, labels, t, training=training)
         return noise_pred
 
     def forward_diffusion(self, x, t, noise):
@@ -217,10 +217,10 @@ class DDPMConditionalWithMLP(nn.Module):
         )
         self.time_emb = nn.Embed(self.timestep_num, self.timestep_dim)
     
-    def __call__(self, x, y, t, noise):
+    def __call__(self, x, y, t, noise, training: bool=True):
         x_t = self.forward_diffusion(x, t, noise)
         inp = jnp.concatenate([x_t, y], axis=-1)
-        noise_pred = self.mlp(x_t, y, self.time_emb(t), training=True)
+        noise_pred = self.mlp(x_t, y, self.time_emb(t), training=training)
         return noise_pred
 
     def forward_diffusion(self, x, t, noise):

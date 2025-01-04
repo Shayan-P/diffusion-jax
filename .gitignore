@@ -2,3 +2,6 @@
 experiments/**
 scratch*.py
 data/**
+notebooks/**
+todo
+scratch/**

@@ -95,6 +95,8 @@ class DatasetConfig:
       dataset = my_dataset.get_mnist()
     elif self.name == 'circle':
       dataset = my_dataset.get_circle_dataset()
+    elif self.name == 'gaussian_points':
+      dataset = my_dataset.get_gaussian_points_dataset()
     else:
         raise ValueError(f"Unknown dataset {self.name}")
     # enforce the same batch size for training and testing
